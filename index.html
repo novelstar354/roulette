@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>音付きルーレット</title>
+<style>
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: sans-serif;
+    background: #f0f0f0;
+    margin: 0;
+    padding: 20px;
+  }
+
+  canvas {
+    border: 3px solid #333;
+    border-radius: 50%;
+    background: #fff;
+  }
+
+  input, button {
+    margin-top: 10px;
+    padding: 10px 15px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  #history {
+    margin-top: 20px;
+    max-width: 400px;
+    width: 100%;
+    background: #fff;
+    border: 2px solid #333;
+    padding: 10px;
+    border-radius: 8px;
+    box-sizing: border-box;
+  }
+
+  #history h3 {
+    margin: 0 0 10px 0;
+    text-align: center;
+  }
+
+  #history ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  #history li {
+    padding: 5px;
+    border-bottom: 1px solid #ccc;
+  }
+
+  #labelsInput {
+    width: 300px;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="roulette" width="400" height="400"></canvas>
+
+<input type="text" id="labelsInput" placeholder="ラベルをカンマ区切りで入力">
+<input type="text" id="winLabelInput" placeholder="当たりラベルをカンマ区切りで入力">
+<button id="setLabels">ラベル設定</button>
+<button id="spin">回す</button>
+
+<div id="history">
+  <h3>履歴</h3>
+  <ul id="resultList"></ul>
+</div>
+
+<!-- 当たり音 -->
+<audio id="winSound">
+  <source src="https://www.soundjay.com/buttons/sounds/button-3.mp3" type="audio/mpeg">
+</audio>
+
+<script>
+const canvas = document.getElementById('roulette');
+const ctx = canvas.getContext('2d');
+const size = canvas.width;
+const radius = size / 2;
+
+let labels = ['1','2','3','4','5','6','7','8'];
+let colors = [];
+let numSegments = labels.length;
+
+let angle = 0;
+let spinning = false;
+
+let winLabels = ['8']; // デフォルト当たり
+
+const resultList = document.getElementById('resultList');
+const winSound = document.getElementById('winSound');
+
+function updateColors() {
+  colors = [];
+  for (let i = 0; i < numSegments; i++) {
+    colors.push(`hsl(${i * 360 / numSegments}, 70%, 60%)`);
+  }
+}
+
+updateColors();
+
+function drawRoulette(highlightIndex=-1) {
+  ctx.clearRect(0,0,size,size);
+  for(let i=0;i<numSegments;i++){
+    const start = (i * 2 * Math.PI / numSegments) + angle;
+    const end = ((i+1)*2*Math.PI/numSegments)+angle;
+
+    ctx.beginPath();
+    ctx.moveTo(radius,radius);
+    ctx.arc(radius,radius,radius,start,end);
+    ctx.fillStyle = (i===highlightIndex)? '#ffff00' : colors[i%colors.length];
+    ctx.fill();
+    ctx.stroke();
+
+    // ラベル
+    ctx.save();
+    ctx.translate(radius,radius);
+    ctx.rotate(start + (end-start)/2);
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#000";
+    ctx.font = "20px sans-serif";
+    ctx.fillText(labels[i], radius-10,10);
+    ctx.restore();
+  }
+
+  // 矢印
+  ctx.fillStyle="#000";
+  ctx.beginPath();
+  ctx.moveTo(radius-10,0);
+  ctx.lineTo(radius+10,0);
+  ctx.lineTo(radius,20);
+  ctx.fill();
+}
+
+function spinRoulette() {
+  if(spinning) return;
+  spinning = true;
+
+  const spinTime = Math.random()*3000 + 2000;
+  const startAngle = angle;
+  const totalRotation = (Math.random()*10+10)*2*Math.PI;
+  const startTime = performance.now();
+
+  function animate(now){
+    const elapsed = now - startTime;
+    if(elapsed<spinTime){
+      const progress = elapsed/spinTime;
+      const easeOut = 1 - Math.pow(1-progress,3);
+      angle = startAngle + totalRotation*easeOut;
+      drawRoulette();
+      requestAnimationFrame(animate);
+    } else {
+      angle = startAngle + totalRotation;
+      const finalIndex = Math.floor(((2*Math.PI - angle%(2*Math.PI)) / (2*Math.PI) * numSegments)) % numSegments;
+      drawRoulette(finalIndex);
+
+      const result = labels[finalIndex];
+      const li = document.createElement('li');
+      li.textContent = result;
+      if(winLabels.includes(result)){
+        li.style.fontWeight='bold';
+        li.style.color='red';
+        winSound.currentTime=0;
+        winSound.play();
+      }
+      resultList.insertBefore(li,resultList.firstChild);
+
+      spinning=false;
+    }
+  }
+
+  requestAnimationFrame(animate);
+}
+
+// ラベルと当たり設定
+document.getElementById('setLabels').addEventListener('click', ()=>{
+  const input = document.getElementById('labelsInput').value.trim();
+  const winInput = document.getElementById('winLabelInput').value.trim();
+  if(input){
+    labels = input.split(',').map(s=>s.trim());
+    numSegments = labels.length;
+    updateColors();
+  }
+  if(winInput){
+    winLabels = winInput.split(',').map(s=>s.trim());
+  }
+  drawRoulette();
+});
+
+document.getElementById('spin').addEventListener('click', spinRoulette);
+
+drawRoulette();
+</script>
+
+</body>
+</html>
