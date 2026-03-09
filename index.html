@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Theme Roulette</title>
+<title>Roulette</title>
  <link rel="icon" href="https://www.silhouette-illust.com/wp-content/uploads/2016/12/18915-600x600.jpg" sizes="16×16" type="image/png" />  
+
 
 <style>
 
@@ -15,37 +16,10 @@
 --glow:none;
 }
 
-/* デフォルト */
-body.default{
---bg:#f0f0f0;
---text:#000;
---panel:#fff;
---glow:none;
-}
-
-/* ネオン */
-body.neon{
---bg:#050510;
---text:#0ff;
---panel:#111;
---glow:0 0 10px #0ff,0 0 20px #0ff;
-}
-
-/* カジノ */
-body.casino{
---bg:#003300;
---text:#ffd700;
---panel:#014d01;
---glow:0 0 10px #ffd700;
-}
-
-/* ダーク */
-body.dark{
---bg:#111;
---text:#eee;
---panel:#222;
---glow:none;
-}
+body.default{--bg:#f0f0f0;--text:#000;--panel:#fff;}
+body.neon{--bg:#050510;--text:#0ff;--panel:#111;--glow:0 0 10px #0ff,0 0 20px #0ff;}
+body.casino{--bg:#003300;--text:#ffd700;--panel:#014d01;--glow:0 0 10px #ffd700;}
+body.dark{--bg:#111;--text:#eee;--panel:#222;}
 
 body{
 margin:0;
@@ -57,34 +31,7 @@ user-select: none;
   -webkit-user-select: none;
 }
 
-h1{
-text-shadow:var(--glow);
-}
-
-#roulette{
-width:320px;
-height:320px;
-margin:15px auto;
-border-radius:50%;
-border:5px solid var(--text);
-box-shadow:var(--glow);
-position:relative;
-overflow:hidden;
-transition:transform 4s cubic-bezier(.17,.67,.25,1);
-}
-
-.slice{
-position:absolute;
-width:50%;
-height:50%;
-top:50%;
-left:50%;
-transform-origin:0 0;
-display:flex;
-align-items:center;
-justify-content:center;
-font-size:12px;
-}
+h1{ text-shadow:var(--glow); }
 
 #pointer{
 width:0;
@@ -95,9 +42,27 @@ border-bottom:35px solid red;
 margin:auto;
 }
 
+#roulette{
+width:340px;
+height:340px;
+margin:10px auto;
+border-radius:50%;
+border:5px solid var(--text);
+position:relative;
+transition:transform 5s cubic-bezier(.2,.7,.2,1);
+overflow:hidden;
+box-shadow:var(--glow);
+}
+
+canvas{
+position:absolute;
+left:0;
+top:0;
+}
+
 button{
 padding:10px 16px;
-margin:5px;
+margin:4px;
 border:none;
 border-radius:6px;
 cursor:pointer;
@@ -106,14 +71,7 @@ color:var(--text);
 box-shadow:var(--glow);
 }
 
-input{
-padding:6px;
-}
-
-#items{
-max-width:420px;
-margin:auto;
-}
+input{ padding:6px }
 
 .item{
 display:flex;
@@ -124,27 +82,20 @@ padding:6px;
 border-radius:6px;
 }
 
+#history{
+max-width:400px;
+margin:auto;
+font-size:14px;
+}
+
 #result{
-font-size:22px;
+font-size:24px;
 margin:10px;
 }
 
-select{
-padding:6px;
-}
-
-@media (max-width:600px){
-
-#roulette{
-width:260px;
-height:260px;
-}
-
-.item{
-flex-direction:column;
-gap:4px;
-}
-
+@media(max-width:600px){
+#roulette{width:260px;height:260px;}
+.item{flex-direction:column;gap:4px;}
 }
 
 </style>
@@ -152,9 +103,9 @@ gap:4px;
 
 <body>
 
-<h1>🎯 Theme Roulette</h1>
+<h1>Roulette</h1>
 
-テーマ:
+テーマ
 <select id="themeSelect">
 <option value="default">デフォルト</option>
 <option value="neon">ネオン</option>
@@ -163,7 +114,10 @@ gap:4px;
 </select>
 
 <div id="pointer"></div>
-<div id="roulette"></div>
+
+<div id="roulette">
+<canvas id="wheel"></canvas>
+</div>
 
 <button onclick="spin()">回す</button>
 
@@ -173,9 +127,13 @@ gap:4px;
 <input id="newItem" placeholder="項目">
 <button onclick="addItem()">追加</button>
 <button onclick="clearItems()">全削除</button>
+<button onclick="exportCSV()">CSV保存</button>
 </div>
 
 <div id="items"></div>
+
+<h3>履歴</h3>
+<div id="history"></div>
 
 <script>
 
@@ -196,10 +154,15 @@ document.body.className=theme
 localStorage.setItem("rouletteTheme",theme)
 }
 
+const canvas=document.getElementById("wheel")
+const ctx=canvas.getContext("2d")
+
+let size=340
+canvas.width=size
+canvas.height=size
+
 let rotation=0
 let spinning=false
-
-const roulette=document.getElementById("roulette")
 
 function save(){
 localStorage.setItem("rouletteData",JSON.stringify(data))
@@ -207,23 +170,37 @@ localStorage.setItem("rouletteData",JSON.stringify(data))
 
 function draw(){
 
-roulette.innerHTML=""
+ctx.clearRect(0,0,size,size)
 
-if(data.length==0)return
+let total=data.reduce((s,d)=>s+d.weight,0)
 
-const deg=360/data.length
+let start=0
 
 data.forEach((d,i)=>{
 
-const slice=document.createElement("div")
-slice.className="slice"
+let angle=(d.weight/total)*Math.PI*2
 
-slice.style.background=`hsl(${i*360/data.length},70%,50%)`
-slice.style.transform=`rotate(${deg*i}deg) skewY(${90-deg}deg)`
+ctx.beginPath()
+ctx.moveTo(size/2,size/2)
 
-slice.innerHTML=`<div style="transform:skewY(${-(90-deg)}deg) rotate(${deg/2}deg)">${d.name}</div>`
+ctx.fillStyle=`hsl(${i*360/data.length},70%,50%)`
 
-roulette.appendChild(slice)
+ctx.arc(size/2,size/2,size/2,start,start+angle)
+
+ctx.fill()
+
+ctx.save()
+
+ctx.translate(size/2,size/2)
+ctx.rotate(start+angle/2)
+
+ctx.fillStyle="#000"
+ctx.font="14px sans-serif"
+ctx.fillText(d.name,size/4,0)
+
+ctx.restore()
+
+start+=angle
 
 })
 
@@ -238,11 +215,11 @@ list.innerHTML=""
 
 data.forEach((d,i)=>{
 
-const div=document.createElement("div")
+let div=document.createElement("div")
 div.className="item"
 
 div.innerHTML=`
-<span>${d.name}</span>
+<input value="${d.name}" onchange="rename(${i},this.value)">
 確率:<input type="number" value="${d.weight}" min="1"
 onchange="changeWeight(${i},this.value)">
 <button onclick="removeItem(${i})">削除</button>
@@ -254,16 +231,23 @@ list.appendChild(div)
 
 }
 
-function changeWeight(i,val){
-data[i].weight=parseFloat(val)
+function rename(i,v){
+data[i].name=v
 save()
+draw()
+}
+
+function changeWeight(i,v){
+data[i].weight=parseFloat(v)
+save()
+draw()
 }
 
 function addItem(){
 
-const input=document.getElementById("newItem")
+let input=document.getElementById("newItem")
 
-if(input.value.trim()=="")return
+if(!input.value)return
 
 data.push({name:input.value,weight:1})
 
@@ -277,6 +261,7 @@ draw()
 function removeItem(i){
 
 data.splice(i,1)
+
 save()
 draw()
 
@@ -285,6 +270,7 @@ draw()
 function clearItems(){
 
 data=[]
+
 save()
 draw()
 
@@ -308,28 +294,77 @@ r-=data[i].weight
 
 function spin(){
 
-if(spinning)return
-if(data.length==0)return
+if(spinning||data.length==0)return
 
 spinning=true
 
-const index=weightedRandom()
+if(navigator.vibrate)navigator.vibrate(100)
 
-const deg=360/data.length
+let index=weightedRandom()
 
-const spinDeg=360*6+(360-index*deg-deg/2)
+let total=data.reduce((s,d)=>s+d.weight,0)
+
+let start=0
+let angle=0
+
+for(let i=0;i<data.length;i++){
+
+let a=(data[i].weight/total)*360
+
+if(i==index){
+angle=start+a/2
+break
+}
+
+start+=a
+
+}
+
+let spinDeg=360*6+(360-angle)
 
 rotation+=spinDeg
 
-roulette.style.transform=`rotate(${rotation}deg)`
+document.getElementById("roulette").style.transform=`rotate(${rotation}deg)`
 
 setTimeout(()=>{
 
-document.getElementById("result").innerText="🎉 "+data[index].name
+let name=data[index].name
+
+document.getElementById("result").innerHTML="🎉 "+name
+
+addHistory(name)
 
 spinning=false
 
-},4000)
+},5000)
+
+}
+
+function addHistory(name){
+
+let h=document.getElementById("history")
+
+let div=document.createElement("div")
+
+div.innerText=name
+
+h.prepend(div)
+
+}
+
+function exportCSV(){
+
+let csv=data.map(d=>`${d.name},${d.weight}`).join("\n")
+
+let blob=new Blob([csv])
+
+let a=document.createElement("a")
+
+a.href=URL.createObjectURL(blob)
+
+a.download="roulette.csv"
+
+a.click()
 
 }
 
