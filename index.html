@@ -2,203 +2,339 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>音付きルーレット</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Theme Roulette</title>
+ <link rel="icon" href="https://www.silhouette-illust.com/wp-content/uploads/2016/12/18915-600x600.jpg" sizes="16×16" type="image/png" />  
+
 <style>
-  body {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    font-family: sans-serif;
-    background: #f0f0f0;
-    margin: 0;
-    padding: 20px;
-  }
 
-  canvas {
-    border: 3px solid #333;
-    border-radius: 50%;
-    background: #fff;
-  }
+:root{
+--bg:#f0f0f0;
+--text:#000;
+--panel:#fff;
+--glow:none;
+}
 
-  input, button {
-    margin-top: 10px;
-    padding: 10px 15px;
-    font-size: 16px;
-    cursor: pointer;
-  }
+/* デフォルト */
+body.default{
+--bg:#f0f0f0;
+--text:#000;
+--panel:#fff;
+--glow:none;
+}
 
-  #history {
-    margin-top: 20px;
-    max-width: 400px;
-    width: 100%;
-    background: #fff;
-    border: 2px solid #333;
-    padding: 10px;
-    border-radius: 8px;
-    box-sizing: border-box;
-  }
+/* ネオン */
+body.neon{
+--bg:#050510;
+--text:#0ff;
+--panel:#111;
+--glow:0 0 10px #0ff,0 0 20px #0ff;
+}
 
-  #history h3 {
-    margin: 0 0 10px 0;
-    text-align: center;
-  }
+/* カジノ */
+body.casino{
+--bg:#003300;
+--text:#ffd700;
+--panel:#014d01;
+--glow:0 0 10px #ffd700;
+}
 
-  #history ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    max-height: 200px;
-    overflow-y: auto;
-  }
+/* ダーク */
+body.dark{
+--bg:#111;
+--text:#eee;
+--panel:#222;
+--glow:none;
+}
 
-  #history li {
-    padding: 5px;
-    border-bottom: 1px solid #ccc;
-  }
+body{
+margin:0;
+font-family:sans-serif;
+background:var(--bg);
+color:var(--text);
+text-align:center;
+user-select: none;
+  -webkit-user-select: none;
+}
 
-  #labelsInput {
-    width: 300px;
-  }
+h1{
+text-shadow:var(--glow);
+}
+
+#roulette{
+width:320px;
+height:320px;
+margin:15px auto;
+border-radius:50%;
+border:5px solid var(--text);
+box-shadow:var(--glow);
+position:relative;
+overflow:hidden;
+transition:transform 4s cubic-bezier(.17,.67,.25,1);
+}
+
+.slice{
+position:absolute;
+width:50%;
+height:50%;
+top:50%;
+left:50%;
+transform-origin:0 0;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:12px;
+}
+
+#pointer{
+width:0;
+height:0;
+border-left:18px solid transparent;
+border-right:18px solid transparent;
+border-bottom:35px solid red;
+margin:auto;
+}
+
+button{
+padding:10px 16px;
+margin:5px;
+border:none;
+border-radius:6px;
+cursor:pointer;
+background:var(--panel);
+color:var(--text);
+box-shadow:var(--glow);
+}
+
+input{
+padding:6px;
+}
+
+#items{
+max-width:420px;
+margin:auto;
+}
+
+.item{
+display:flex;
+justify-content:space-between;
+background:var(--panel);
+margin:4px;
+padding:6px;
+border-radius:6px;
+}
+
+#result{
+font-size:22px;
+margin:10px;
+}
+
+select{
+padding:6px;
+}
+
+@media (max-width:600px){
+
+#roulette{
+width:260px;
+height:260px;
+}
+
+.item{
+flex-direction:column;
+gap:4px;
+}
+
+}
+
 </style>
 </head>
+
 <body>
 
-<canvas id="roulette" width="400" height="400"></canvas>
+<h1>🎯 Theme Roulette</h1>
 
-<input type="text" id="labelsInput" placeholder="ラベルをカンマ区切りで入力">
-<input type="text" id="winLabelInput" placeholder="当たりラベルをカンマ区切りで入力">
-<button id="setLabels">ラベル設定</button>
-<button id="spin">回す</button>
+テーマ:
+<select id="themeSelect">
+<option value="default">デフォルト</option>
+<option value="neon">ネオン</option>
+<option value="casino">カジノ</option>
+<option value="dark">ダーク</option>
+</select>
 
-<div id="history">
-  <h3>履歴</h3>
-  <ul id="resultList"></ul>
+<div id="pointer"></div>
+<div id="roulette"></div>
+
+<button onclick="spin()">回す</button>
+
+<div id="result"></div>
+
+<div>
+<input id="newItem" placeholder="項目">
+<button onclick="addItem()">追加</button>
+<button onclick="clearItems()">全削除</button>
 </div>
 
-<!-- 当たり音 -->
-<audio id="winSound">
-  <source src="https://www.soundjay.com/buttons/sounds/button-3.mp3" type="audio/mpeg">
-</audio>
+<div id="items"></div>
 
 <script>
-const canvas = document.getElementById('roulette');
-const ctx = canvas.getContext('2d');
-const size = canvas.width;
-const radius = size / 2;
 
-let labels = ['1','2','3','4','5','6','7','8'];
-let colors = [];
-let numSegments = labels.length;
+let data=JSON.parse(localStorage.getItem("rouletteData"))||[
+{name:"A",weight:1},
+{name:"B",weight:1},
+{name:"C",weight:1}
+]
 
-let angle = 0;
-let spinning = false;
+let theme=localStorage.getItem("rouletteTheme")||"default"
 
-let winLabels = ['8']; // デフォルト当たり
+document.body.className=theme
+document.getElementById("themeSelect").value=theme
 
-const resultList = document.getElementById('resultList');
-const winSound = document.getElementById('winSound');
-
-function updateColors() {
-  colors = [];
-  for (let i = 0; i < numSegments; i++) {
-    colors.push(`hsl(${i * 360 / numSegments}, 70%, 60%)`);
-  }
+document.getElementById("themeSelect").onchange=e=>{
+theme=e.target.value
+document.body.className=theme
+localStorage.setItem("rouletteTheme",theme)
 }
 
-updateColors();
+let rotation=0
+let spinning=false
 
-function drawRoulette(highlightIndex=-1) {
-  ctx.clearRect(0,0,size,size);
-  for(let i=0;i<numSegments;i++){
-    const start = (i * 2 * Math.PI / numSegments) + angle;
-    const end = ((i+1)*2*Math.PI/numSegments)+angle;
+const roulette=document.getElementById("roulette")
 
-    ctx.beginPath();
-    ctx.moveTo(radius,radius);
-    ctx.arc(radius,radius,radius,start,end);
-    ctx.fillStyle = (i===highlightIndex)? '#ffff00' : colors[i%colors.length];
-    ctx.fill();
-    ctx.stroke();
-
-    // ラベル
-    ctx.save();
-    ctx.translate(radius,radius);
-    ctx.rotate(start + (end-start)/2);
-    ctx.textAlign = "right";
-    ctx.fillStyle = "#000";
-    ctx.font = "20px sans-serif";
-    ctx.fillText(labels[i], radius-10,10);
-    ctx.restore();
-  }
-
-  // 矢印
-  ctx.fillStyle="#000";
-  ctx.beginPath();
-  ctx.moveTo(radius-10,0);
-  ctx.lineTo(radius+10,0);
-  ctx.lineTo(radius,20);
-  ctx.fill();
+function save(){
+localStorage.setItem("rouletteData",JSON.stringify(data))
 }
 
-function spinRoulette() {
-  if(spinning) return;
-  spinning = true;
+function draw(){
 
-  const spinTime = Math.random()*3000 + 2000;
-  const startAngle = angle;
-  const totalRotation = (Math.random()*10+10)*2*Math.PI;
-  const startTime = performance.now();
+roulette.innerHTML=""
 
-  function animate(now){
-    const elapsed = now - startTime;
-    if(elapsed<spinTime){
-      const progress = elapsed/spinTime;
-      const easeOut = 1 - Math.pow(1-progress,3);
-      angle = startAngle + totalRotation*easeOut;
-      drawRoulette();
-      requestAnimationFrame(animate);
-    } else {
-      angle = startAngle + totalRotation;
-      const finalIndex = Math.floor(((2*Math.PI - angle%(2*Math.PI)) / (2*Math.PI) * numSegments)) % numSegments;
-      drawRoulette(finalIndex);
+if(data.length==0)return
 
-      const result = labels[finalIndex];
-      const li = document.createElement('li');
-      li.textContent = result;
-      if(winLabels.includes(result)){
-        li.style.fontWeight='bold';
-        li.style.color='red';
-        winSound.currentTime=0;
-        winSound.play();
-      }
-      resultList.insertBefore(li,resultList.firstChild);
+const deg=360/data.length
 
-      spinning=false;
-    }
-  }
+data.forEach((d,i)=>{
 
-  requestAnimationFrame(animate);
+const slice=document.createElement("div")
+slice.className="slice"
+
+slice.style.background=`hsl(${i*360/data.length},70%,50%)`
+slice.style.transform=`rotate(${deg*i}deg) skewY(${90-deg}deg)`
+
+slice.innerHTML=`<div style="transform:skewY(${-(90-deg)}deg) rotate(${deg/2}deg)">${d.name}</div>`
+
+roulette.appendChild(slice)
+
+})
+
+renderList()
+
 }
 
-// ラベルと当たり設定
-document.getElementById('setLabels').addEventListener('click', ()=>{
-  const input = document.getElementById('labelsInput').value.trim();
-  const winInput = document.getElementById('winLabelInput').value.trim();
-  if(input){
-    labels = input.split(',').map(s=>s.trim());
-    numSegments = labels.length;
-    updateColors();
-  }
-  if(winInput){
-    winLabels = winInput.split(',').map(s=>s.trim());
-  }
-  drawRoulette();
-});
+function renderList(){
 
-document.getElementById('spin').addEventListener('click', spinRoulette);
+const list=document.getElementById("items")
+list.innerHTML=""
 
-drawRoulette();
+data.forEach((d,i)=>{
+
+const div=document.createElement("div")
+div.className="item"
+
+div.innerHTML=`
+<span>${d.name}</span>
+確率:<input type="number" value="${d.weight}" min="1"
+onchange="changeWeight(${i},this.value)">
+<button onclick="removeItem(${i})">削除</button>
+`
+
+list.appendChild(div)
+
+})
+
+}
+
+function changeWeight(i,val){
+data[i].weight=parseFloat(val)
+save()
+}
+
+function addItem(){
+
+const input=document.getElementById("newItem")
+
+if(input.value.trim()=="")return
+
+data.push({name:input.value,weight:1})
+
+input.value=""
+
+save()
+draw()
+
+}
+
+function removeItem(i){
+
+data.splice(i,1)
+save()
+draw()
+
+}
+
+function clearItems(){
+
+data=[]
+save()
+draw()
+
+}
+
+function weightedRandom(){
+
+let total=data.reduce((s,d)=>s+d.weight,0)
+
+let r=Math.random()*total
+
+for(let i=0;i<data.length;i++){
+
+if(r<data[i].weight)return i
+
+r-=data[i].weight
+
+}
+
+}
+
+function spin(){
+
+if(spinning)return
+if(data.length==0)return
+
+spinning=true
+
+const index=weightedRandom()
+
+const deg=360/data.length
+
+const spinDeg=360*6+(360-index*deg-deg/2)
+
+rotation+=spinDeg
+
+roulette.style.transform=`rotate(${rotation}deg)`
+
+setTimeout(()=>{
+
+document.getElementById("result").innerText="🎉 "+data[index].name
+
+spinning=false
+
+},4000)
+
+}
+
+draw()
+
 </script>
 
 </body>
